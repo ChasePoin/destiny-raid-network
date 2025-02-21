@@ -79,28 +79,29 @@ class Player():
         page_num = 0
         instance_ids = []
         # limit to 50 pages for now
-        for page_num in range(0,50):
-            try:
-                url = f"https://www.bungie.net/Platform/Destiny2/{platform}/Account/{destiny_membership_id}/Character/{character_ids[0]}/Stats/Activities/?mode=4&page={page_num}"
-                response = requests.get(url, headers=HEADERS)
-            except: 
-                raise Exception("Error while trying to request instance ids for raids.")
+        for character in character_ids:
+            for page_num in range(0,50):
+                try:
+                    url = f"https://www.bungie.net/Platform/Destiny2/{platform}/Account/{destiny_membership_id}/Character/{character}/Stats/Activities/?mode=4&page={page_num}"
+                    response = requests.get(url, headers=HEADERS)
+                except: 
+                    raise Exception("Error while trying to request instance ids for raids.")
 
-            response = response.json()
+                response = response.json()
 
-            # this means we're done
-            if response['Response'] == {}:
-                # print(len(instance_ids)) total successfully finished raids
-                return instance_ids
-            
-            # probably a good idea to store a dictionary of a player with their instance ids in case of duplicate look ups? maybe, will just do an array for now
-            activities = response['Response']['activities']
+                # this means we're done
+                if response['Response'] == {}:
+                    # print(len(instance_ids)) total successfully finished raids
+                    break
+                
+                # probably a good idea to store a dictionary of a player with their instance ids in case of duplicate look ups? maybe, will just do an array for now
+                activities = response['Response']['activities']
 
-            # move through every single instance of a raid, only adding succesfully completed raids
-            for i, _ in enumerate(activities):
-                instanceId = activities[i]['activityDetails']['instanceId']
-                if activities[i]['values']['completed']['basic']['value'] == 1.0:
-                    instance_ids.append(instanceId)
+                # move through every single instance of a raid, only adding succesfully completed raids
+                for i, _ in enumerate(activities):
+                    instanceId = activities[i]['activityDetails']['instanceId']
+                    if activities[i]['values']['completed']['basic']['value'] == 1.0:
+                        instance_ids.append(instanceId)
         return instance_ids
     
 
@@ -121,23 +122,31 @@ class Player():
                 raise Exception(f"Issue with getting activity data for {activity_id}.")
             response = response.json() 
 
-            other_players = response['Response']['entries']
+            # we only want full completions, can skip checkpoints
+            from_checkpoint = response['Response']['activityWasStartedFromBeginning']
+            # print(from_checkpoint)
+            if from_checkpoint == True:
 
-            # FOR LATER: STORE USED INSTANCE IDS TO SPEED UP PROCESSOR FOR OTHER PLAYERS
-            i = 0
-            for player in other_players:
-                player_data = player['player']['destinyUserInfo']
-                # need to keep track of the amount of times user has raided with another user
-                if player_data['membershipId'] in player_dictionary:
-                    player_dictionary[player_data['membershipId']][1] += 1
-                else:
-                    # 0 gets cut off if in front of code
-                    if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
-                        appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
-                        player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + appended_code, 1]
+                other_players = response['Response']['entries']
+
+                # FOR LATER: STORE USED INSTANCE IDS TO SPEED UP PROCESSOR FOR OTHER PLAYERS
+                
+                for player in other_players:
+                    player_data = player['player']['destinyUserInfo']
+                    # need to keep track of the amount of times user has raided with another user
+                    if player_data['membershipId'] in player_dictionary:
+                        player_dictionary[player_data['membershipId']][1] += 1
+                    elif player_data['membershipId'] == self.destiny_membership_id: pass
                     else:
-                        player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1]
+                        # 0 gets cut off if in front of code
+                        if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
+                            appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
+                            player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + appended_code, 1]
+                        else:
+                            player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1]
 
         return player_dictionary
                                                                       
+
+# TO DO: ADD GLOBAL INSTANCE TRACKER TO NOT REDO DATA
                 
