@@ -1,12 +1,13 @@
 import os
 import requests
+import main
 
 HEADERS = {'X-API-KEY': os.getenv("bungie_token"), 'Content-Type': 'application/json'}
 
 
 class Player():
 
-    def __init__(self, username):
+    def __init__(self, username, id=None):
         """"
         All relevant information relating to the player.
 
@@ -18,15 +19,28 @@ class Player():
         splitString = username.split("#")
         displayName = splitString[0]
         displayNameCode = splitString[1]
+        if displayNameCode[0] == "0":
+            displayNameCode = displayNameCode[1:]
 
+        print(displayName + ' ' + displayNameCode)
+
+        # deprecated ?
         try: 
-            url = f'https://www.bungie.net/Platform/User/Search/Prefix/{displayName}/0/'
+            url = f'https://www.bungie.net/Platform/User/Search/Prefix/{displayName}/{pagenum}/'
             response = requests.get(url, headers=HEADERS)
+            response = response.json()
         except:
             raise Exception("Error when searching user. Make sure the name and digits are correct.")
+
+        # try:
+        #     url = f'https://www.bungie.net/Platform/User/Search/GlobalName/{pagenum}/'
+        #     name = {'displayNamePrefix': displayName}
+        #     response = requests.post(url, json=name, headers=HEADERS)
+        #     response = response.json()
+        # except:
+        #     raise Exception("Error when searching user AGAIN.")
         
-        response = response.json()
-        # print(response)
+        print(response)        
         # get prefix and numbers, important for verifying correct user
 
         # get any user with that prefix, then specifically search for the user with the numbers provided
@@ -34,7 +48,6 @@ class Player():
         for user in listOfUsers:
             if user['bungieGlobalDisplayName'] == displayName and user['bungieGlobalDisplayNameCode'] == int(displayNameCode):
                 # need bungie id, destiny id, platform for instance ids
-                self.bungie_membership_id  =  user['bungieNetMembershipId']
                 self.platform              =  user['destinyMemberships'][0]['membershipType']
                 self.destiny_membership_id =  user['destinyMemberships'][0]['membershipId']
                 self.bungie_name           =  username
@@ -42,6 +55,10 @@ class Player():
         self.character_ids = self.get_character_ids(self.platform, self.destiny_membership_id)
         self.instance_ids = self.get_instance_ids(self.destiny_membership_id,self.platform,self.character_ids)
         self.players_raided_with = self.get_other_players_in_activities(self.instance_ids)
+                
+            
+
+
 
     def get_character_ids(self, platform, destiny_membership_id) -> list:
         """"
@@ -113,7 +130,7 @@ class Player():
             instance_ids (list): List of player's raid instance ids.
         """
         player_dictionary = dict()
-
+        
         for activity_id in instance_ids:
             try:
                 url = f"https://www.bungie.net/Platform/Destiny2/Stats/PostGameCarnageReport/{activity_id}/"
@@ -141,12 +158,18 @@ class Player():
                         # 0 gets cut off if in front of code
                         if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
                             appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
-                            player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + appended_code, 1]
+                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + appended_code, 1]
                         else:
-                            player_dictionary[player_data['membershipId']] = [player_data['displayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1]
+                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1]
 
+                    # keep track of each instance's activity id and players within it
+                    if activity_id in main.inst_dictionary:
+                        main.inst_dictionary[activity_id].append(player_data['membershipId'])
+                    else:
+                        main.inst_dictionary[activity_id] = [player_data['membershipId']]
         return player_dictionary
                                                                       
 
 # TO DO: ADD GLOBAL INSTANCE TRACKER TO NOT REDO DATA
+# TO DO: CHANGE INIT TO TAKE PLATFORM, MEMBERSHIP ID; CHANGE GET_OTHER_PLAYERS TO PUT PLATFORM IN THE DICTIONARY
                 
