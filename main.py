@@ -5,7 +5,7 @@ inst_dictionary = dict()
 def main():
     # ask for username then create an object of the player
     name = input("Enter the username of the player you want to add. Example: Khazicus#9648: ")
-    player = grabbers.Player(name)
+    player = grabbers.RootPlayer(name)
     print(player.players_raided_with.items())
     sorted_data = dict(sorted(player.players_raided_with.items(), key=lambda x: x[1][1], reverse=True))
 
@@ -19,7 +19,7 @@ def main():
 
     for other_player in sorted_data:
         print(sorted_data[other_player][0])
-        player_obj = grabbers.Player(sorted_data[other_player][0])
+        player_obj = grabbers.AdjacentPlayer(sorted_data[other_player][0], other_player, sorted_data[other_player][2])
         sorted_data = dict(sorted(player_obj.players_raided_with.items(), key=lambda x: x[1][1], reverse=True))
         full_user_dict[player_obj.bungie_name] = sorted_data
     

@@ -5,7 +5,7 @@ import main
 HEADERS = {'X-API-KEY': os.getenv("bungie_token"), 'Content-Type': 'application/json'}
 
 
-class Player():
+class RootPlayer():
 
     def __init__(self, username, id=None):
         """"
@@ -26,7 +26,7 @@ class Player():
 
         # deprecated ?
         try: 
-            url = f'https://www.bungie.net/Platform/User/Search/Prefix/{displayName}/{pagenum}/'
+            url = f'https://www.bungie.net/Platform/User/Search/Prefix/{displayName}/0/'
             response = requests.get(url, headers=HEADERS)
             response = response.json()
         except:
@@ -97,7 +97,7 @@ class Player():
         instance_ids = []
         # limit to 50 pages for now
         for character in character_ids:
-            for page_num in range(0,50):
+            for page_num in range (0,50):
                 try:
                     url = f"https://www.bungie.net/Platform/Destiny2/{platform}/Account/{destiny_membership_id}/Character/{character}/Stats/Activities/?mode=4&page={page_num}"
                     response = requests.get(url, headers=HEADERS)
@@ -119,6 +119,7 @@ class Player():
                     instanceId = activities[i]['activityDetails']['instanceId']
                     if activities[i]['values']['completed']['basic']['value'] == 1.0:
                         instance_ids.append(instanceId)
+            
         return instance_ids
     
 
@@ -158,9 +159,9 @@ class Player():
                         # 0 gets cut off if in front of code
                         if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
                             appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
-                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + appended_code, 1]
+                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + appended_code, 1, player_data['membershipType']]
                         else:
-                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1]
+                            player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1, player_data['membershipType']]
 
                     # keep track of each instance's activity id and players within it
                     if activity_id in main.inst_dictionary:
@@ -169,6 +170,16 @@ class Player():
                         main.inst_dictionary[activity_id] = [player_data['membershipId']]
         return player_dictionary
                                                                       
+class AdjacentPlayer(RootPlayer):
+    def __init__(self, username, destiny_membership_id, platform):
+        self.platform              =  platform
+        self.destiny_membership_id =  destiny_membership_id
+        self.bungie_name           =  username
+
+        self.character_ids = self.get_character_ids(self.platform, self.destiny_membership_id)
+        self.instance_ids = self.get_instance_ids(self.destiny_membership_id,self.platform,self.character_ids)
+        self.players_raided_with = self.get_other_players_in_activities(self.instance_ids)   
+
 
 # TO DO: ADD GLOBAL INSTANCE TRACKER TO NOT REDO DATA
 # TO DO: CHANGE INIT TO TAKE PLATFORM, MEMBERSHIP ID; CHANGE GET_OTHER_PLAYERS TO PUT PLATFORM IN THE DICTIONARY
