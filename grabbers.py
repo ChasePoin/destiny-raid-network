@@ -11,7 +11,7 @@ class RootPlayer():
 
     def __init__(self, username, id=None):
         """"
-        All relevant information relating to the player.
+        Sets object's username and display code required for searching the root user.
 
         """
         if '#' not in username:
@@ -27,17 +27,38 @@ class RootPlayer():
         print(self.displayName + ' ' + self.displayNameCode)
     
     async def setup(self):
+        """
+        Calls all necessary functions to get users raided with for the root user.
+
+        """
         async with aiohttp.ClientSession() as session:
-            await self.get_starting_info(session)
+            await self.get_root_info(session)
             await self.get_character_ids(session)
             await self.get_instance_ids(session)
             await self.get_other_players_in_activities(session)
     
     async def fetch(self, session, url):
+        """
+        Makes endpoint request using the session and url.
+
+        Args:
+            session: active aiohttp client session used for fetching results from endpoints
+            url: url of the endpoint to access
+
+        Returns:
+            endpoint response as json
+        """
         async with session.get(url, headers=HEADERS) as response:
             return await response.json()  
 
-    async def get_starting_info(self, session):
+    async def get_root_info(self, session):
+        """
+        Gets basic information for the root user that is necessary for the endpoints we are going to use.
+
+        Args:
+            session: active aiohttp client session used for fetching results from endpoints
+
+        """
         try: 
             url = f'https://www.bungie.net/Platform/User/Search/Prefix/{self.displayName}/0/'
             response = await self.fetch(session, url)
@@ -59,6 +80,9 @@ class RootPlayer():
         """"
         Gets character ids due to instance ids being stored per character.
 
+        Args:
+            session: active aiohttp client session used for fetching results from endpoints
+
         """
         try:
             url = f"https://www.bungie.net/Platform/Destiny2/{self.platform}/Profile/{self.destiny_membership_id}/?components=Profiles,Characters"
@@ -76,11 +100,9 @@ class RootPlayer():
         """
         Uses the activity history endpoint in order to get all raid instance ids for a player.
 
-        Raises:
-            Exception: If the request for a page of instance ids throws an error.
+        Args:
+            session: active aiohttp client session used for fetching results from endpoints
 
-        Returns:
-            list: All instance ids of raids for a player.
         """
         
         instance_ids = []
@@ -115,14 +137,15 @@ class RootPlayer():
 
     async def get_other_players_in_activities(self, session):
         """
-        Converts a list of instance ids into a list of players this user has succesfully completed a raid with.
+        Creates a dictionary of this user and all of the players they have raided with and the number of times they have reaided with them.
+        ex// {'other player dmid': ['Hypwr#8749', 122, 3], 'other player dmid' : ['Lunar#0270', 107, 3] ...}
+        Basically 'dmid' : [bungie username, times raided with, platform].
 
         Args:
-            instance_ids (list): List of player's raid instance ids.
+            session: active aiohttp client session used for fetching results from endpoints
         """
-        player_dictionary = dict()
         tasks = []
-        
+        player_dictionary = dict()
         for activity_id in self.instance_ids:
             try:
                 url = f"https://www.bungie.net/Platform/Destiny2/Stats/PostGameCarnageReport/{activity_id}/"
@@ -131,12 +154,13 @@ class RootPlayer():
                 raise Exception(f"Issue with getting activity data for {activity_id}.")
 
         responses = await asyncio.gather(*tasks)
-            # we only want full completions, can skip checkpoints
-        for response in responses:
-            from_checkpoint = response['Response']['activityWasStartedFromBeginning']
-            # print(from_checkpoint)
-            if from_checkpoint == True:
 
+        
+        for response in responses:
+            from_beginning = response['Response']['activityWasStartedFromBeginning']
+
+            if from_beginning == True:
+            
                 other_players = response['Response']['entries']
                 
                 for player in other_players:
@@ -153,21 +177,27 @@ class RootPlayer():
                         else:
                             player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1, player_data['membershipType']]
 
-                # keep track of each instance's activity id and players within it
-                # if activity_id in main.inst_dictionary:
-                #     main.inst_dictionary[activity_id].append(player_data['membershipId'])
-                # else:
-                #     main.inst_dictionary[activity_id] = [player_data['membershipId']]
         self.players_raided_with = player_dictionary
                                                                       
 class AdjacentPlayer(RootPlayer):
     def __init__(self, username, destiny_membership_id, platform):
+        """ 
+        Takes username, dmid, platform: these are the only things we need for the endpoints we are going to be using.
+
+        Args:
+            username (str): Bungie username in fromat: username#0000.
+            destiny_membership_id (str): Destiny membership id required for certain endpoints.
+            platform (str): platform the user plays on, example: steam (3), psn (1?)
+        """
         print(username, destiny_membership_id, platform)
         self.platform              =  platform
         self.destiny_membership_id =  destiny_membership_id
         self.bungie_name           =  username
     
     async def setup(self):
+        """
+        Setup for any adjacent player requires character_ids -> instance_ids -> iteration through other players in instance_ids.
+        """
         async with aiohttp.ClientSession() as session:
             await self.get_character_ids(session)
             await self.get_instance_ids(session)
