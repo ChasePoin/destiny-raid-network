@@ -3,9 +3,19 @@ import requests
 import main
 import asyncio
 import aiohttp
+import sqlite3
 
 HEADERS = {'X-API-KEY': os.getenv("bungie_token"), 'Content-Type': 'application/json'}
 
+def edge_entry(conn, player1, player2, weight):
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO edges (name1, name2, weight) 
+            VALUES (?, ?, ?)
+        ''', (player1, player2, weight))
+    except TypeError as e: 
+        print(f"Failed to insert edge from {player1} to {player2} with weight of {weight}.")
 
 class RootPlayer():
 
@@ -147,7 +157,6 @@ class RootPlayer():
         tasks = []
         player_dictionary = dict()
         # network_dict = dict()
-        # network_dict[self.bungie_name] = {}
         for activity_id in self.instance_ids:
             try:
                 url = f"https://www.bungie.net/Platform/Destiny2/Stats/PostGameCarnageReport/{activity_id}/"
