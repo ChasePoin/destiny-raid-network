@@ -146,6 +146,8 @@ class RootPlayer():
         """
         tasks = []
         player_dictionary = dict()
+        network_dict = dict()
+        network_dict[self.bungie_name] = {}
         for activity_id in self.instance_ids:
             try:
                 url = f"https://www.bungie.net/Platform/Destiny2/Stats/PostGameCarnageReport/{activity_id}/"
@@ -168,16 +170,20 @@ class RootPlayer():
                     # need to keep track of the amount of times user has raided with another user
                     if player_data['membershipId'] in player_dictionary:
                         player_dictionary[player_data['membershipId']][1] += 1
+                        network_dict[self.bungie_name][player_data['bungieGlobalDisplayName']] += 1
                     elif player_data['membershipId'] == self.destiny_membership_id: pass
                     else:
                         # 0 gets cut off if in front of code
                         if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
                             appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
                             player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + appended_code, 1, player_data['membershipType']]
+                            network_dict[self.bungie_name][player_data['bungieGlobalDisplayName']] = 1
                         else:
                             player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + str(player_data["bungieGlobalDisplayNameCode"]), 1, player_data['membershipType']]
+                            network_dict[self.bungie_name][player_data['bungieGlobalDisplayName']] = 1
 
         self.players_raided_with = player_dictionary
+        self.player_network_dict = network_dict
                                                                       
 class AdjacentPlayer(RootPlayer):
     def __init__(self, username, destiny_membership_id, platform):
