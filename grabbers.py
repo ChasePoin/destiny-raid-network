@@ -64,7 +64,7 @@ class RootPlayer():
         Calls all necessary functions to get users raided with for the root user.
 
         """
-        semaphore = asyncio.Semaphore(150)
+        semaphore = asyncio.Semaphore(75)
         async with semaphore:
             async with aiohttp.ClientSession() as session:
                 await self.get_root_info(session)
@@ -251,7 +251,7 @@ class AdjacentPlayer(RootPlayer):
         """
         Setup for any adjacent player requires character_ids -> instance_ids -> iteration through other players in instance_ids.
         """
-        semaphore = asyncio.Semaphore(150)
+        semaphore = asyncio.Semaphore(75)
         async with semaphore:
             async with aiohttp.ClientSession() as session:
                 await self.get_character_ids(session)
