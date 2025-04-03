@@ -1,21 +1,43 @@
 import os
-import requests
-import main
 import asyncio
 import aiohttp
 import sqlite3
 
 HEADERS = {'X-API-KEY': os.getenv("bungie_token"), 'Content-Type': 'application/json'}
 
+CONNECT = sqlite3.connect("edge_data.db")
+
+def create_database(conn):
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS edges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name1 TEXT NOT NULL,
+            name2 TEXT NOT NULL,
+            weight INT NOT NULL
+        )
+    ''')
+
+
 def edge_entry(conn, player1, player2, weight):
     try:
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO edges (name1, name2, weight) 
+            INSERT OR IGNORE INTO edges (name1, name2, weight) 
             VALUES (?, ?, ?)
         ''', (player1, player2, weight))
     except TypeError as e: 
         print(f"Failed to insert edge from {player1} to {player2} with weight of {weight}.")
+
+def add_edge_to_graph(graph):
+    cursor = CONNECT.cursor()
+    cursor.execute('SELECT name1, name2, weight FROM edges')
+    edges = cursor.fetchall()
+    for name1, name2, weight in edges:
+        print(name1, " ", name2)
+        graph.add_edge(name1,name2,weight=weight)
+    return graph
+        
 
 class RootPlayer():
 
@@ -24,6 +46,7 @@ class RootPlayer():
         Sets object's username and display code required for searching the root user.
 
         """
+        create_database(CONNECT)
         if '#' not in username:
             raise Exception("Please include the # with the 4 digits in the name.")
         self.username = username
@@ -41,11 +64,14 @@ class RootPlayer():
         Calls all necessary functions to get users raided with for the root user.
 
         """
-        async with aiohttp.ClientSession() as session:
-            await self.get_root_info(session)
-            await self.get_character_ids(session)
-            await self.get_instance_ids(session)
-            await self.get_other_players_in_activities(session)
+        semaphore = asyncio.Semaphore(150)
+        async with semaphore:
+            async with aiohttp.ClientSession() as session:
+                await self.get_root_info(session)
+                await self.get_character_ids(session)
+                await self.get_instance_ids(session)
+                await self.get_other_players_in_activities(session)
+                await self.add_to_db()
     
     async def fetch(self, session, url):
         """
@@ -130,7 +156,9 @@ class RootPlayer():
         
 
         # this means we're done
-        for response in responses:        
+        for response in responses:     
+            try: response['Response']
+            except KeyError: continue   
             if response['Response'] == {}:
                 pass # print(len(instance_ids)) # total successfully finished raids
             else:
@@ -166,12 +194,13 @@ class RootPlayer():
 
         responses = await asyncio.gather(*tasks)
 
-        
+        # we need the bungie name + platform for future requests about a user, otherwise we could just do links and weights
         for response in responses:
+            try: response['Response']
+            except KeyError: continue 
             from_beginning = response['Response']['activityWasStartedFromBeginning']
 
             if from_beginning == True:
-            
                 other_players = response['Response']['entries']
                 
                 for player in other_players:
@@ -183,6 +212,10 @@ class RootPlayer():
                     elif player_data['membershipId'] == self.destiny_membership_id: pass
                     else:
                         # 0 gets cut off if in front of code
+                        try: 
+                            player_data['bungieGlobalDisplayNameCode']
+                        except KeyError: 
+                            continue
                         if len(str(player_data['bungieGlobalDisplayNameCode'])) == 3:
                             appended_code = "0" + str(player_data['bungieGlobalDisplayNameCode'])
                             player_dictionary[player_data['membershipId']] = [player_data['bungieGlobalDisplayName'] + "#" + appended_code, 1, player_data['membershipType']]
@@ -192,7 +225,12 @@ class RootPlayer():
                             # network_dict[self.bungie_name][player_data['bungieGlobalDisplayName']] = 1
 
         self.players_raided_with = player_dictionary
+
         # self.player_network_dict = network_dict
+    async def add_to_db(self):
+        for other_player in self.players_raided_with:
+            edge_entry(CONNECT, self.bungie_name, self.players_raided_with[other_player][0], weight=self.players_raided_with[other_player][1])
+            CONNECT.commit()
                                                                       
 class AdjacentPlayer(RootPlayer):
     def __init__(self, username, destiny_membership_id, platform):
@@ -213,10 +251,13 @@ class AdjacentPlayer(RootPlayer):
         """
         Setup for any adjacent player requires character_ids -> instance_ids -> iteration through other players in instance_ids.
         """
-        async with aiohttp.ClientSession() as session:
-            await self.get_character_ids(session)
-            await self.get_instance_ids(session)
-            await self.get_other_players_in_activities(session) 
+        semaphore = asyncio.Semaphore(150)
+        async with semaphore:
+            async with aiohttp.ClientSession() as session:
+                await self.get_character_ids(session)
+                await self.get_instance_ids(session)
+                await self.get_other_players_in_activities(session) 
+                await self.add_to_db()
 
 
 
